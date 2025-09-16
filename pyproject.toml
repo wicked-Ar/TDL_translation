@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tdl-translation"
+version = "0.1.0"
+description = "Reference implementation of a TDL translation pipeline"
+authors = [{ name = "TDL Translation Maintainers" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tdl_translation*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
