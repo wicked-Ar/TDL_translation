@@ -2,6 +2,22 @@
 
 This repository documents a reference architecture for translating natural-language task requests into robot-executable programs via an intermediate Task Description Language (TDL). The pipeline combines large language models (LLMs), planning algorithms, constraint analysis, and external solvers to safely deploy verified task code across heterogeneous robot platforms.
 
+## Getting Started
+
+The Python package under `tdl_translation/` implements an executable demo of the architecture using light-weight mock services. To try the pipeline end-to-end:
+
+```bash
+python -m tdl_translation.cli "Move the 2kg box from the storage rack to the loading dock carefully."
+```
+
+The command prints the generated TDL program and a summary of the deployment stage. Use `--json` to inspect all intermediate artifacts or `--show-logs` to display the state machine transitions.
+
+Automated tests validate a successful happy path run as well as safety constraint handling:
+
+```bash
+pytest
+```
+
 ## System Overview
 
 1. **Natural-language understanding** – A large language model (LLM), such as Google's Gemma, interprets human commands and extracts structured task goals, constraints, and success criteria.
