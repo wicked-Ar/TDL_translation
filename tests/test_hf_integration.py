@@ -48,6 +48,20 @@ class _StopOnlyClient:
         return _FakeResponse(self._response)
 
 
+class _NoStopClient:
+    def __init__(self, response: str) -> None:
+        self._response = response
+        self.calls = []
+
+    def chat_completion(self, *, messages, **kwargs):  # type: ignore[override]
+        self.calls.append({"messages": messages, **kwargs})
+        if "stop" in kwargs:
+            raise TypeError("chat_completion() got an unexpected keyword argument 'stop'")
+        if "stop_sequences" in kwargs:
+            raise TypeError("chat_completion() got an unexpected keyword argument 'stop_sequences'")
+        return _FakeResponse(self._response)
+
+
 def test_huggingface_service_parses_structured_task_spec() -> None:
     fake_response = """
     {"goal": "Move the crate", "constraints": ["Be careful"],
@@ -117,3 +131,16 @@ def test_huggingface_service_prefers_declared_stop_keyword() -> None:
 
     assert spec.goal == "Move the crate"
     assert all("stop" in call and "stop_sequences" not in call for call in client.calls)
+
+
+def test_huggingface_service_falls_back_to_no_stop_keyword() -> None:
+    fake_response = """{"goal": "Move the crate"}"""
+    client = _NoStopClient(fake_response)
+    service = HuggingFaceGemmaService(config=HuggingFaceConfig(), client=client)
+
+    spec = service.analyze_requirement("Move the crate")
+
+    assert spec.goal == "Move the crate"
+    # Ensure we attempted both stop keywords before falling back to none.
+    assert any("stop" in call or "stop_sequences" in call for call in client.calls[:-1])
+    assert "stop" not in client.calls[-1] and "stop_sequences" not in client.calls[-1]

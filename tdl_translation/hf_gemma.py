@@ -34,28 +34,42 @@ def _preferred_stop_keywords(callable_obj: Any) -> Tuple[str, ...]:
     has_var_kwargs = any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
     )
-    preferred: List[str] = []
+    supported_stop = False
+    supported_stop_sequences = False
 
-    for candidate in ("stop", "stop_sequences"):
-        parameter = signature.parameters.get(candidate)
-        if parameter is not None and parameter.kind in (
+    for name in ("stop", "stop_sequences"):
+        parameter = signature.parameters.get(name)
+        if parameter is None:
+            continue
+        if parameter.kind in (
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
             inspect.Parameter.KEYWORD_ONLY,
         ):
-            preferred.append(candidate)
+            if name == "stop":
+                supported_stop = True
+            else:
+                supported_stop_sequences = True
 
-    if not preferred and has_var_kwargs:
-        preferred = ["stop", "stop_sequences"]
+    order: List[str] = []
+    if supported_stop:
+        order.append("stop")
+    if supported_stop_sequences:
+        order.append("stop_sequences")
 
-    if not preferred:
-        preferred = ["stop_sequences", "stop"]
+    if not order and has_var_kwargs:
+        order = ["stop", "stop_sequences"]
 
-    # Deduplicate while preserving order and ensure both fallbacks are present for robustness.
-    ordered = []
-    for candidate in preferred + ["stop", "stop_sequences"]:
-        if candidate not in ordered:
-            ordered.append(candidate)
-    return tuple(ordered)
+    if not order:
+        # When nothing is introspectable, try stop first for compatibility with
+        # older huggingface_hub versions, then fall back to stop_sequences.
+        order = ["stop", "stop_sequences"]
+
+    # Ensure both fallbacks are present without changing the relative priority of
+    # already-discovered keywords.
+    for candidate in ("stop", "stop_sequences"):
+        if candidate not in order:
+            order.append(candidate)
+    return tuple(order)
 
 
 def _default_token(token: Optional[str]) -> str:
@@ -148,9 +162,12 @@ class _ChatMixin:
                 raise
 
         if response is None:
-            raise last_type_error or TypeError(
-                "Failed to call Hugging Face chat completion API due to incompatible parameters"
-            )
+            try:
+                response = self._client.chat_completion(**base_kwargs)  # type: ignore[call-arg]
+            except TypeError:
+                raise last_type_error or TypeError(
+                    "Failed to call Hugging Face chat completion API due to incompatible parameters"
+                )
         try:
             choice = response.choices[0]
             content = choice.message["content"] if isinstance(choice.message, Mapping) else choice.message.content
