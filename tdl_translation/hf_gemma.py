@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
@@ -20,6 +21,41 @@ except Exception:  # pragma: no cover - handled at runtime
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 _CODE_BLOCK_RE = re.compile(r"```(?:tdl)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
+def _preferred_stop_keywords(callable_obj: Any) -> Tuple[str, ...]:
+    """Return the preferred stop keyword order supported by the callable."""
+
+    try:
+        signature = inspect.signature(callable_obj)
+    except (TypeError, ValueError):  # pragma: no cover - signature may be unsupported
+        return ("stop", "stop_sequences")
+
+    has_var_kwargs = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+    )
+    preferred: List[str] = []
+
+    for candidate in ("stop", "stop_sequences"):
+        parameter = signature.parameters.get(candidate)
+        if parameter is not None and parameter.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        ):
+            preferred.append(candidate)
+
+    if not preferred and has_var_kwargs:
+        preferred = ["stop", "stop_sequences"]
+
+    if not preferred:
+        preferred = ["stop_sequences", "stop"]
+
+    # Deduplicate while preserving order and ensure both fallbacks are present for robustness.
+    ordered = []
+    for candidate in preferred + ["stop", "stop_sequences"]:
+        if candidate not in ordered:
+            ordered.append(candidate)
+    return tuple(ordered)
 
 
 def _default_token(token: Optional[str]) -> str:
@@ -95,8 +131,7 @@ class _ChatMixin:
 
         response = None
         last_type_error: Optional[TypeError] = None
-
-        for stop_kw in ("stop", "stop_sequences"):
+        for stop_kw in _preferred_stop_keywords(self._client.chat_completion):
             kwargs = dict(base_kwargs)
             if stop_values:
                 kwargs[stop_kw] = list(stop_values)
