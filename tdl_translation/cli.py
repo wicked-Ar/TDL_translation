@@ -77,13 +77,60 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print state machine logs after execution",
     )
+    parser.add_argument(
+        "--use-hf-gemma",
+        action="store_true",
+        help="Use Hugging Face Gemma for requirement analysis and TDL generation",
+    )
+    parser.add_argument(
+        "--hf-model",
+        default="google/gemma-2-9b-it",
+        help="Hugging Face model identifier to use when --use-hf-gemma is enabled",
+    )
+    parser.add_argument(
+        "--hf-token",
+        help="Hugging Face token (falls back to HUGGINGFACE_API_TOKEN env var)",
+    )
+    parser.add_argument(
+        "--hf-temperature",
+        type=float,
+        default=0.1,
+        help="Sampling temperature for Gemma completions",
+    )
+    parser.add_argument(
+        "--hf-max-tokens",
+        type=int,
+        default=1024,
+        help="Maximum tokens to generate per completion",
+    )
+    parser.add_argument(
+        "--hf-top-p",
+        type=float,
+        default=0.9,
+        help="Top-p nucleus sampling parameter for Gemma completions",
+    )
 
     args = parser.parse_args(argv)
 
     environment = build_demo_environment()
     robot = build_robot_profile(args.vendor, payload=args.payload, reach=args.reach)
 
-    pipeline = TDLPipeline()
+    pipeline_kwargs = {}
+    if args.use_hf_gemma:
+        from .hf_gemma import GemmaTDLCompiler, HuggingFaceConfig, HuggingFaceGemmaService
+
+        config = HuggingFaceConfig(
+            model=args.hf_model,
+            token=args.hf_token,
+            temperature=args.hf_temperature,
+            max_tokens=args.hf_max_tokens,
+            top_p=args.hf_top_p,
+        )
+        hf_service = HuggingFaceGemmaService(config=config)
+        hf_compiler = GemmaTDLCompiler(config=config)
+        pipeline_kwargs.update({"llm": hf_service, "compiler": hf_compiler})
+
+    pipeline = TDLPipeline(**pipeline_kwargs)
     result = pipeline.run(
         args.command,
         environment=environment,
