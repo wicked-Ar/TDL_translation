@@ -12,6 +12,16 @@ python -m tdl_translation.cli "Move the 2kg box from the storage rack to the loa
 
 The command prints the generated TDL program and a summary of the deployment stage. Use `--json` to inspect all intermediate artifacts or `--show-logs` to display the state machine transitions.
 
+To invoke a hosted Gemma model through Hugging Face for both requirement analysis and TDL formatting, supply your access token (either via `--hf-token` or the `HUGGINGFACE_API_TOKEN` environment variable) and enable the integration flag:
+
+```bash
+export HUGGINGFACE_API_TOKEN=hf_xxx
+python -m tdl_translation.cli "Move the 2kg box from the storage rack to the loading dock carefully." \
+  --use-hf-gemma --hf-model google/gemma-2-9b-it --hf-temperature 0.2
+```
+
+The Hugging Face configuration options allow you to tune sampling parameters such as `--hf-max-tokens` and `--hf-top-p` when experimenting with different Gemma checkpoints.
+
 Automated tests validate a successful happy path run as well as safety constraint handling:
 
 ```bash
